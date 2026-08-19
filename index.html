@@ -174,6 +174,8 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .actions{display:flex;gap:9px;align-items:center;margin-top:18px}
 .actions .note{font-size:11px;color:var(--text-muted);margin-left:auto;text-align:right}
 .hidden{display:none !important}
+
+/* ===== dash.css ===== */
 .deptline{display:flex;align-items:center;gap:11px;padding:9px 11px;margin-bottom:14px;
   border:1px solid var(--hair);border-radius:3px;background:var(--surface-2);min-width:0}
 .deptline .k{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--text-muted);
@@ -208,12 +210,14 @@ button.crumb-i:hover{color:var(--text-primary);background:var(--surface-2);borde
 
 /* surface (not hairline) background + per-tile divider, so a short final row
    never renders as an empty grey cell */
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(172px,1fr));gap:1px;background:var(--surface-1)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1px;background:var(--surface-1)}
 .kpi{background:var(--surface-1);padding:19px 16px;display:flex;flex-direction:column;
   justify-content:center;min-width:0;box-shadow:-1px 0 0 var(--hair),0 -1px 0 var(--hair)}
 .kpi-k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);font-weight:700;margin-bottom:6px}
-.kpi-v{font-size:clamp(16px,1.62vw,23px);font-weight:600;letter-spacing:-.015em;line-height:1.15;
-  min-width:0;overflow-wrap:anywhere}
+/* never break inside a figure — "757,358,765.3 / 1" across two lines is worse than
+   smaller type. Ceiling is set so 14 chars still clear the 190px tile track. */
+.kpi-v{font-size:clamp(14px,1.45vw,20px);font-weight:600;letter-spacing:-.015em;line-height:1.15;
+  min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kpi-s{font-size:11px;color:var(--text-muted);margin-top:4px}
 .kpi.bad .kpi-v{color:var(--over)}
 .kpi.good .kpi-s{color:var(--good)}
@@ -393,7 +397,7 @@ button.crumb-i:hover{color:var(--text-primary);background:var(--surface-2);borde
         <span class="fmt">CSV</span><span class="fmt">TSV</span>
       </div>
       <div class="dropfoot">
-        <b>Expected columns:</b> Funds Center/Commitment Item · Consumable Budget · Consumed Budget · Available Amount · Titles
+        <b>Expected columns:</b> Funds Center/Commitment Item · Consumable Budget · Consumed Budget · Available Amount
       </div>
     </div>
 
@@ -557,15 +561,6 @@ function findHeaderRow(rows) {
   }
   return 0;
 }
-const TAGRE = /^(total|category|sub[\s\-_]?category|subcategory)$/i;
-function normTag(v) {
-  const s = String(v == null ? "" : v).trim();
-  if (/^total$/i.test(s)) return "Total";
-  if (/^category$/i.test(s)) return "Category";
-  if (/^sub[\s\-_]?category$/i.test(s)) return "Sub-Category";
-  return "";
-}
-
 function autoMap(headers, body) {
   const H = headers.map(h => String(h).toLowerCase().replace(/\s+/g, " ").trim());
   const nCols = headers.length;
@@ -573,15 +568,6 @@ function autoMap(headers, body) {
     for (const t of tests) { const i = H.findIndex(h => h && t(h)); if (i >= 0) return i; }
     return -1;
   };
-  // tag column: the one whose cells most often read Total/Category/Sub-Category
-  let tag = -1, tagScore = 0;
-  for (let c = 0; c < nCols; c++) {
-    let s = 0;
-    for (let r = 0; r < body.length; r++) if (TAGRE.test(String(body[r][c] == null ? "" : body[r][c]).trim())) s++;
-    if (s > tagScore) { tagScore = s; tag = c; }
-  }
-  if (tagScore < Math.max(3, body.length * 0.4)) tag = findBy(h => h.indexOf("title") >= 0);
-
   // numeric density per column (for fallbacks)
   const dens = [];
   for (let c = 0; c < nCols; c++) {
@@ -598,7 +584,7 @@ function autoMap(headers, body) {
   if (label < 0) label = 0;
 
   const numCols = [];
-  for (let c = 0; c < nCols; c++) if (c !== label && c !== tag && dens[c] >= 0.6) numCols.push(c);
+  for (let c = 0; c < nCols; c++) if (c !== label && dens[c] >= 0.6) numCols.push(c);
 
   let consumable = findBy(h => h.indexOf("consumable") >= 0);
   let consumed   = findBy(h => h.indexOf("consumed") >= 0);
@@ -607,44 +593,50 @@ function autoMap(headers, body) {
   if (consumed   < 0) consumed   = numCols[1] != null ? numCols[1] : -1;
   if (available  < 0) available  = numCols[2] != null ? numCols[2] : -1;
 
-  return { label, consumable, consumed, available, tag, numCols, dens };
+  return { label, consumable, consumed, available, numCols, dens };
 }
 
 /* ------------------------------------------------------ structure rules
-   The leading numeric code on the label column IS the hierarchy:
-     • 3–4 digit code  ("684 - Insurance Premium", "660-Repairs & Maint…")  → CATEGORY
-     • 8–10 digit code ("900111101  Insurance Exp - Cash Insurance")        → SUB-CATEGORY
-       …but a long code seen BEFORE the first category is the funds-centre
-       / department heading ("151100101  Sui (Prod) - Production Operations"),
-       not a line item.
-     • anything else before the first category                              → report heading
-   Sub-categories bind to the most recent category. This repeats to EOF, so
-   any number of categories with any number of lines is read dynamically.   */
-const CODE_SUB = /^\s*(\d{8,10})(?!\d)/;
-const CODE_CAT = /^\s*(\d{3,4})(?!\d)\s*[-–—]?/;
+   There is no hierarchy tag column. The leading numeric code on
+   "Funds Center/Commitment Item" is the ONLY source of hierarchy:
+     • 3-digit code  ("684 - Insurance Premium", "660-Repairs & Maint…")  → CATEGORY
+     • 9-digit code  ("900111101  Insurance Exp - Cash Insurance")        → LINE ITEM
+       …except a 9-digit code seen BEFORE the first category, which is the
+       funds-centre / department heading ("151100101  Sui (Prod) - …").
+     • no leading code, before the first category                         → report heading
+     • no leading code, after one — or any other digit length — is NOT
+       guessed at: it is parked and reported, never silently folded into
+       the open category (that is how subtotals quietly go wrong).
+   Line items bind to the most recent category. This repeats to EOF, so any
+   number of categories with any number of lines is read dynamically.      */
+const CAT_DIGITS = 3;
+const SUB_DIGITS = 9;
+const LEAD_CODE  = /^\s*(\d+)(?!\d)/;
 
 function codeOf(name) {
-  const s = String(name == null ? "" : name).trim();
-  let m = s.match(CODE_SUB);
-  if (m) return { kind: "long", code: m[1] };
-  m = s.match(CODE_CAT);
-  if (m) return { kind: "short", code: m[1] };
-  return { kind: "none", code: null };
+  const m = String(name == null ? "" : name).trim().match(LEAD_CODE);
+  if (!m) return { kind: "none", code: null, len: 0 };
+  const len = m[1].length;
+  return { kind: len === CAT_DIGITS ? "short" : len === SUB_DIGITS ? "long" : "odd",
+           code: m[1], len: len };
 }
 /* pattern verdict for a row, given whether a category has been opened yet */
 function classifyByCode(name, seenCategory) {
   const c = codeOf(name);
-  if (c.kind === "short") return { tag: "Category", why: c.code + " — " + c.code.length + "-digit group code" };
+  if (c.kind === "short") return { tag: "Category", why: c.code + " — " + CAT_DIGITS + "-digit group code" };
   if (c.kind === "long")  return seenCategory
-    ? { tag: "Sub-Category", why: c.code + " — commitment item code" }
+    ? { tag: "Sub-Category", why: c.code + " — " + SUB_DIGITS + "-digit commitment item code" }
     : { tag: "Heading", why: c.code + " — funds centre code above the first category" };
+  if (c.kind === "odd")   return seenCategory
+    ? { tag: "Unknown", why: c.code + " — " + c.len + "-digit code, neither " + CAT_DIGITS + " nor " + SUB_DIGITS }
+    : { tag: "Heading", why: c.code + " — " + c.len + "-digit code above the first category" };
   return seenCategory
-    ? { tag: "Sub-Category", why: "no code; bound to the open category" }
-    : { tag: "Heading", why: "no code, above the first category" };
+    ? { tag: "Unknown", why: "no leading code" }
+    : { tag: "Heading", why: "no leading code, above the first category" };
 }
 
 /* --------------------------------------------------------- build model */
-function buildModel(src, sheetIdx, map, useTagColumn) {
+function buildModel(src, sheetIdx, map) {
   const sheet = src.sheets[sheetIdx];
   const hIdx  = findHeaderRow(sheet.rows);
   const headers = sheet.rows[hIdx].map(h => String(h).trim());
@@ -657,7 +649,7 @@ function buildModel(src, sheetIdx, map, useTagColumn) {
     available:  N(G(r, map.available))
   });
 
-  const disagree = [], cats = [], headings = [];
+  const unknown = [], cats = [], headings = [];
   let cur = null;
 
   body.forEach((r, i) => {
@@ -665,16 +657,12 @@ function buildModel(src, sheetIdx, map, useTagColumn) {
     if (!name) return;
     const rec = { name, values: vals(r), row: hIdx + 2 + i };
 
-    const byCode = classifyByCode(name, cats.length > 0);
-    const byTag  = normTag(G(r, map.tag));                 // "" when absent
-    // the tag column is a cross-check, never the parser
-    if (byTag && byTag !== byCode.tag && !(byTag === "Total" && byCode.tag === "Heading"))
-      disagree.push({ row: rec.row, name, tag: byTag, code: byCode.tag, why: byCode.why });
-
-    const tag = useTagColumn && byTag ? byTag : byCode.tag;
-    if (tag === "Heading" || tag === "Total") { headings.push(rec); return; }
-    if (tag === "Category") { cur = Object.assign(rec, { subs: [] }); cats.push(cur); return; }
-    if (cur) cur.subs.push(rec); else headings.push(rec);
+    const v = classifyByCode(name, cats.length > 0);
+    rec.why = v.why;
+    if (v.tag === "Heading")  { headings.push(rec); return; }
+    if (v.tag === "Category") { cur = Object.assign(rec, { subs: [] }); cats.push(cur); return; }
+    if (v.tag === "Sub-Category") { cur.subs.push(rec); return; }
+    unknown.push(rec);            // parked, never folded into a category
   });
 
   /* the department heading = last leading row carrying a long funds-centre code */
@@ -696,25 +684,27 @@ function buildModel(src, sheetIdx, map, useTagColumn) {
 
   /* -------- findings -------- */
   const findings = [];
-  const near = (a, b) => Math.abs(a - b) <= Math.max(1, Math.abs(b) * 1e-6);
+  /* currency tolerance: absorb float/rounding noise only. A 1e-6 relative test
+     would let an 836-rupee gap pass silently on an 836M total — useless. */
+  const near = (a, b) => Math.abs(a - b) <= Math.max(0.5, Math.abs(b) * 1e-9);
 
   findings.push({
     level: "ok",
-    title: "Hierarchy read from the label codes",
-    html: "Parsed dynamically: <code>3–4 digit</code> codes opened <b>" + cats.length +
-      "</b> categories; <code>8–10 digit</code> codes bound <b>" +
-      cats.reduce((a, c) => a + c.subs.length, 0) + "</b> commitment items to the category above them" +
+    title: "Hierarchy read from the leading code",
+    html: "No tag column used. <code>" + CAT_DIGITS + "-digit</code> codes opened <b>" + cats.length +
+      "</b> categories; <code>" + SUB_DIGITS + "-digit</code> codes bound <b>" +
+      cats.reduce((a, c) => a + c.subs.length, 0) + "</b> line items to the category above them" +
       (department ? "; department heading <code>" + esc(department.name.slice(0, 46)) + "</code>" : "") + "."
   });
 
-  if (disagree.length) findings.push({
-    level: useTagColumn ? "crit" : "warn",
-    title: "Tag column disagrees with the code pattern on " + disagree.length + " row" + (disagree.length > 1 ? "s" : ""),
-    html: disagree.slice(0, 4).map(c => "<code>row " + esc(String(c.row)) + " · " + esc(c.name.slice(0, 40)) +
-      "</code> tagged <b>" + esc(c.tag) + "</b>, code says <b>" + esc(c.code) + "</b> (" + esc(c.why) + ")").join("; ") +
-      (disagree.length > 4 ? " …and " + (disagree.length - 4) + " more" : "") +
-      (useTagColumn ? ". The tag column is currently driving the parse — totals may not reconcile."
-                    : ". The code pattern is driving the parse, so these rows are placed correctly.")
+  if (unknown.length) findings.push({
+    level: "crit",
+    title: unknown.length + " row" + (unknown.length > 1 ? "s do" : " does") + " not match either code rule",
+    html: unknown.slice(0, 4).map(u => "<code>row " + esc(String(u.row)) + " · " +
+      esc(u.name.slice(0, 40)) + "</code> (" + esc(u.why) + ")").join("; ") +
+      (unknown.length > 4 ? " …and " + (unknown.length - 4) + " more" : "") +
+      ". These are excluded from every total rather than guessed into a category — " +
+      "their values are <code>" + fmtFull(unknown.reduce((a, u) => a + u.values.consumable, 0)) + "</code> consumable."
   });
 
   const mism = cats.map(c => {
@@ -766,7 +756,7 @@ function buildModel(src, sheetIdx, map, useTagColumn) {
   const emptyCats = cats.filter(c => !c.subs.length);
   if (emptyCats.length) findings.push({
     level: "warn", title: emptyCats.length + " category" + (emptyCats.length > 1 ? "ies have" : " has") + " no line items",
-    html: "No 8–10 digit commitment item followed: <code>" +
+    html: "No " + SUB_DIGITS + "-digit commitment item followed: <code>" +
       emptyCats.slice(0, 3).map(c => esc(c.name.slice(0, 34))).join("</code>, <code>") + "</code>."
   });
 
@@ -775,14 +765,14 @@ function buildModel(src, sheetIdx, map, useTagColumn) {
     sheetName: sheet.name, sheetIdx, headers, hIdx, map,
     rowCount: body.length, cats, headings, declared, department, grandRow,
     deptName: department ? department.name : null,
-    total: rolled, rolled, disagree, findings, lineCount: allLines.length
+    total: rolled, rolled, unknown, findings, lineCount: allLines.length
   };
 }
 
 /* ====================================================================== */
 /*  UI — stage 1                                                          */
 /* ====================================================================== */
-const S = { src: null, model: null, map: null, sheetIdx: 0, useTagColumn: false,
+const S = { src: null, model: null, map: null, sheetIdx: 0,
             view: "chart", scale: "absolute", sortKey: "consumable", sortDir: -1,
             path: [], query: "" };
 
@@ -835,7 +825,7 @@ async function handleFile(file) {
       progress(steps);
     } else { steps[2].state = "ok"; steps[2].detail = "4 of 4 matched"; progress(steps); }
 
-    S.model = buildModel(src, 0, S.map, S.useTagColumn);
+    S.model = buildModel(src, 0, S.map);
     steps[3].state = "ok";
     steps[3].detail = S.model.cats.length + " categories · " + S.model.lineCount + " lines";
     progress(steps);
@@ -887,16 +877,16 @@ function renderInspect() {
   }
 
   const g = el("div", "grid2");
-  [["label", "Label column", false], ["consumable", "Consumable budget", false],
-   ["consumed", "Consumed budget", false], ["available", "Available amount", false],
-   ["tag", "Hierarchy tag column", true]].forEach(([key, lbl, none]) => {
+  [["label", "Funds Center / Commitment Item", false], ["consumable", "Consumable budget", false],
+   ["consumed", "Consumed budget", false], ["available", "Available amount", false]
+  ].forEach(([key, lbl, none]) => {
     const f = el("div", "field");
     f.appendChild(el("label", null, lbl));
     const s = el("select"); s.dataset.key = key;
     colOptions(s, m.headers, S.map[key], none);
     s.addEventListener("change", () => {
       S.map[key] = +s.value;
-      S.model = buildModel(S.src, S.sheetIdx, S.map, S.useTagColumn);
+      S.model = buildModel(S.src, S.sheetIdx, S.map);
       renderInspect();
     });
     f.appendChild(s); g.appendChild(f);
@@ -910,7 +900,7 @@ function renderInspect() {
       S.sheetIdx = +s.value;
       const sh = S.src.sheets[S.sheetIdx], hi = findHeaderRow(sh.rows);
       S.map = autoMap(sh.rows[hi].map(h => String(h).trim()), sh.rows.slice(hi + 1));
-      S.model = buildModel(S.src, S.sheetIdx, S.map, S.useTagColumn);
+      S.model = buildModel(S.src, S.sheetIdx, S.map);
       renderInspect();
     });
     f.appendChild(s); g.appendChild(f);
@@ -933,19 +923,11 @@ function renderInspect() {
       '<div class="body"><strong>' + esc(f.title) + "</strong><p>" + f.html + "</p></div>";
     b2.appendChild(d);
   });
-  if (S.map.tag >= 0) {
-    const lab = el("label", "switch");
-    lab.innerHTML = '<input type="checkbox" ' + (S.useTagColumn ? "checked" : "") +
-      '><span class="tr"></span><span>Let the tag column override the code pattern' +
-      (m.disagree.length ? " (" + m.disagree.length + " row" + (m.disagree.length > 1 ? "s" : "") + " would move)" : "") +
-      "</span>";
-    $("input", lab).addEventListener("change", e => {
-      S.useTagColumn = e.target.checked;
-      S.model = buildModel(S.src, S.sheetIdx, S.map, S.useTagColumn);
-      renderInspect();
-    });
-    b2.appendChild(lab);
-  }
+  const rule = el("div", "deptline");
+  rule.innerHTML = '<span class="k">Rule</span><span class="v">Leading ' + CAT_DIGITS +
+    "-digit code = category · leading " + SUB_DIGITS +
+    "-digit code = line item · first " + SUB_DIGITS + "-digit row = department</span>";
+  b2.appendChild(rule);
   p2.appendChild(b2); box.appendChild(p2);
 
   /* --- actions --- */
@@ -959,7 +941,7 @@ function renderInspect() {
   const note = el("div", "note");
   note.innerHTML = m.cats.length
     ? fmtCompact(m.total.consumable) + " consumable across " + m.cats.length + " categories"
-    : "No categories detected — check the hierarchy tag column.";
+    : "No categories detected — no row in the label column starts with a " + CAT_DIGITS + "-digit code.";
   act.appendChild(note);
   box.appendChild(act);
 }
@@ -1004,7 +986,14 @@ function renderDash() {
   /* hero + KPI */
   const v = node.values;
   const util = pct(v.consumed, v.consumable);
-  const overLines = node.children.filter(c => c.values.available < 0).length;
+  /* count overspent LINE ITEMS in the subtree, not just direct children — at root,
+     18 categories can all net positive while 11 commitment items underneath are
+     negative, and a "0 overspent" tile beside an "11 overspent" finding is how a
+     dashboard loses trust. */
+  const overLines = root
+    ? m.cats.reduce((a, c) => a + c.subs.filter(s => s.values.available < 0).length, 0)
+    : node.children.filter(c => c.values.available < 0).length;
+  const overCats = root ? m.cats.filter(c => c.values.available < 0).length : 0;
 
   const head = el("section", "hero");
   const left = el("div", "hero-main");
@@ -1027,7 +1016,11 @@ function renderDash() {
     { k: "Consumed budget", v: fmtVal(v.consumed), sub: fmtPct(util) + " utilisation", tone: "" },
     { k: "Available amount", v: fmtVal(v.available), sub: fmtPct(pct(v.available, v.consumable)) + " remaining", tone: v.available < 0 ? "bad" : "" },
     { k: root ? "Categories" : "Line items", v: fmtFull(node.children.length), sub: root ? m.lineCount + " line items" : "commitment items", tone: "" },
-    { k: "Overspent", v: fmtFull(overLines), sub: overLines ? "negative available" : "none at this level", tone: overLines ? "bad" : "good" }
+    { k: "Overspent", v: fmtFull(overLines),
+      sub: !overLines ? (root ? "no line item is negative" : "none in this category")
+         : root ? "line items · " + overCats + " of " + m.cats.length + " categories net negative"
+                : "line items with negative available",
+      tone: overLines ? "bad" : "good" }
   ].forEach(t => {
     const c = el("div", "kpi" + (t.tone ? " " + t.tone : ""));
     c.appendChild(el("div", "kpi-k", t.k));
