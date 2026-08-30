@@ -65,6 +65,16 @@ export class AuthController {
     );
   }
 
+  /**
+   * A cookie is only removed when the clearing header repeats the attributes it
+   * was set with. Clearing on `path` alone leaves a `SameSite=None; Secure`
+   * cookie in place, so the user stays signed in.
+   */
+  private clearOptions() {
+    const { maxAge: _maxAge, ...rest } = this.cookieOptions();
+    return rest;
+  }
+
   private cookieOptions(maxAge = 1000 * 60 * 60 * 12) {
     return {
       httpOnly: true,
@@ -92,7 +102,7 @@ export class AuthController {
         this.cookieOptions(1000 * 60 * 10),
       );
     } else {
-      res.clearCookie(this.returnToCookie, { path: '/' });
+      res.clearCookie(this.returnToCookie, this.clearOptions());
     }
     res.redirect(
       `${this.caasWebUrl}/auth/login?redirect=${encodeURIComponent(
@@ -108,7 +118,7 @@ export class AuthController {
     @Res() res: import('express').Response,
   ): Promise<void> {
     const returnTo = safeReturnTo(req.cookies?.[this.returnToCookie]);
-    res.clearCookie(this.returnToCookie, { path: '/' });
+    res.clearCookie(this.returnToCookie, this.clearOptions());
 
     if (!caasToken) {
       res.redirect(`${this.frontendUrl}/?auth=missing_token`);
@@ -137,7 +147,17 @@ export class AuthController {
 
   @Post('logout')
   logout(@Res() res: import('express').Response): void {
-    res.clearCookie(this.cookieName, { path: '/' });
-    res.status(200).json({ success: true });
+    res.clearCookie(this.cookieName, this.clearOptions());
+    res.clearCookie(this.returnToCookie, this.clearOptions());
+    // Dropping only this app's cookie leaves the CaaS One session alive, so the
+    // next guarded route signs the user straight back in through SSO and the
+    // sign-out looks like a page refresh. CaaS One's logout revokes the refresh
+    // tokens and lands them on its sign-in page, with this app remembered.
+    res.status(200).json({
+      success: true,
+      logoutUrl: `${this.caasWebUrl}/auth/logout?redirect=${encodeURIComponent(
+        this.callbackUrl,
+      )}`,
+    });
   }
 }

@@ -81,12 +81,20 @@ export class AuthService {
 
   logout(): void {
     this.http
-      .post(`${this.base}/auth/logout`, {}, { withCredentials: true })
+      .post<{ logoutUrl?: string }>(
+        `${this.base}/auth/logout`,
+        {},
+        { withCredentials: true },
+      )
       .pipe(catchError(() => of(null)))
-      .subscribe(() => {
+      .subscribe((res) => {
         this.sessionSignal.set(ANONYMOUS_SESSION);
         this.inflight = null;
-        this.nav.redirect('/');
+        // Going to '/' would hit a guarded route while the CaaS One session is
+        // still alive and sign the user straight back in — a sign-out that
+        // looks like a refresh. The API hands back CaaS One's logout URL so the
+        // SSO session ends too.
+        this.nav.redirect(res?.logoutUrl || '/');
       });
   }
 
