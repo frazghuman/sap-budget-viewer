@@ -1,0 +1,53 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# Build output
+/dist
+/build
+*.tsbuildinfo
+
+# Environment — `.env.example` is the committed template, real values never are
+.env
+.env.*
+!.env.example
+
+# Tests and coverage
+/coverage
+/.nyc_output
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Caches
+.eslintcache
+.npm
+.cache
+/temp
+/tmp
+
+# Uploads written at runtime rather than checked in
+/uploads
+
+# Editors and IDEs
+.idea
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*.sublime-workspace
+.history
+
+# OS
+.DS_Store
+Thumbs.db

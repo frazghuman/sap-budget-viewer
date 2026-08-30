@@ -1,0 +1,364 @@
+<div class="stage">
+  @if (loading()) {
+    <div class="state-block" role="status" aria-live="polite">
+      <fluent-spinner size="medium" appearance="primary"></fluent-spinner>
+      <p>Loading budget data…</p>
+    </div>
+  } @else if (error()) {
+    <div class="state-block error" role="alert">
+      <h2>{{ error() }}</h2>
+      <p>The API did not answer. Check that the backend is running on port 3000.</p>
+      <fluent-button appearance="primary" (click)="ngOnInit()">Try again</fluent-button>
+    </div>
+  } @else if (!dataset()) {
+    <div class="state-block" role="status">
+      <h2>No budget data yet</h2>
+      <p>
+        Nothing has been imported for this application.
+        @if (auth.canUpload()) {
+          Upload a SAP funds centre export to get started.
+        } @else {
+          An administrator needs to upload a SAP funds centre export.
+        }
+      </p>
+      @if (auth.canUpload()) {
+        <fluent-button appearance="primary" routerLink="/upload">Upload a file</fluent-button>
+      }
+    </div>
+  } @else {
+    <!-- breadcrumb -->
+    <nav class="crumb" aria-label="Drill-down">
+      <button type="button" class="crumb-i" [class.cur]="isRoot()" (click)="toRoot()">
+        {{ rootLabel() }}
+      </button>
+      @if (!isRoot()) {
+        <span class="crumb-s" aria-hidden="true">›</span>
+        <span class="crumb-i cur">{{ node().name }}</span>
+      }
+    </nav>
+
+    <!-- hero + KPI tiles -->
+    <section class="hero">
+      <div class="hero-main">
+        <div class="hero-lb">
+          Consumable budget · {{ isRoot() ? rootLabel() : node().name }}
+        </div>
+        <div class="hero-v">
+          {{ formatFull(node().values.consumable) }}<span class="cur">PKR</span>
+        </div>
+        <div
+          class="hero-meter"
+          role="meter"
+          [attr.aria-valuenow]="meterWidth(utilisation())"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          [attr.aria-label]="'Utilisation of ' + node().name"
+        >
+          <div
+            class="hero-meter-f"
+            [class.over]="node().values.available < 0"
+            [style.width.%]="meterWidth(utilisation())"
+          ></div>
+        </div>
+        <div class="hero-sub">
+          {{ formatPercent(utilisation()) }} of the consumable budget has been consumed
+        </div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi">
+          <div class="kpi-k">Consumed budget</div>
+          <div class="kpi-v">{{ fmt(node().values.consumed) }}</div>
+          <div class="kpi-s">{{ formatPercent(utilisation()) }} utilisation</div>
+        </div>
+        <div class="kpi" [class.bad]="node().values.available < 0">
+          <div class="kpi-k">Available amount</div>
+          <div class="kpi-v">{{ fmt(node().values.available) }}</div>
+          <div class="kpi-s">{{ formatPercent(remaining()) }} remaining</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-k">{{ isRoot() ? 'Categories' : 'Line items' }}</div>
+          <div class="kpi-v">{{ formatFull(allRows().length) }}</div>
+          <div class="kpi-s">
+            {{ isRoot() ? model()!.lineCount + ' line items' : 'commitment items' }}
+          </div>
+        </div>
+        <div class="kpi" [class.bad]="overspentLines() > 0" [class.good]="overspentLines() === 0">
+          <div class="kpi-k">Overspent</div>
+          <div class="kpi-v">{{ formatFull(overspentLines()) }}</div>
+          <div class="kpi-s">
+            @if (!overspentLines()) {
+              {{ isRoot() ? 'no line item is negative' : 'none in this category' }}
+            } @else if (isRoot()) {
+              line items · {{ overspentCats() }} of {{ model()!.cats.length }} categories net negative
+            } @else {
+              line items with negative available
+            }
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- control bar -->
+    <div class="ctlbar">
+      <div class="ctl">
+        <span class="ctl-k" id="viewLabel">View</span>
+        <div class="seg" role="group" aria-labelledby="viewLabel">
+          <button type="button" class="seg-b" [class.on]="view() === 'chart'"
+                  [attr.aria-pressed]="view() === 'chart'" (click)="view.set('chart')">Chart</button>
+          <button type="button" class="seg-b" [class.on]="view() === 'table'"
+                  [attr.aria-pressed]="view() === 'table'" (click)="view.set('table')">Table</button>
+        </div>
+      </div>
+
+      @if (view() === 'chart') {
+        <div class="ctl">
+          <span class="ctl-k" id="scaleLabel">Scale</span>
+          <div class="seg" role="group" aria-labelledby="scaleLabel">
+            <button type="button" class="seg-b" [class.on]="scale() === 'absolute'"
+                    [attr.aria-pressed]="scale() === 'absolute'"
+                    (click)="scale.set('absolute')">Absolute</button>
+            <button type="button" class="seg-b" [class.on]="scale() === 'utilization'"
+                    [attr.aria-pressed]="scale() === 'utilization'"
+                    (click)="scale.set('utilization')">Utilisation %</button>
+          </div>
+        </div>
+      }
+
+      <div class="ctl">
+        <span class="ctl-k" id="unitsLabel">Units</span>
+        <div class="seg" role="group" aria-labelledby="unitsLabel">
+          <button type="button" class="seg-b" [class.on]="units() === 'compact'"
+                  [attr.aria-pressed]="units() === 'compact'" (click)="units.set('compact')">836M</button>
+          <button type="button" class="seg-b" [class.on]="units() === 'full'"
+                  [attr.aria-pressed]="units() === 'full'" (click)="units.set('full')">835,999,744</button>
+        </div>
+      </div>
+
+      <div class="ctl">
+        <label class="ctl-k" for="sortSel">Sort</label>
+        <select
+          id="sortSel"
+          class="ctl-sel"
+          [value]="sortKey()"
+          (change)="setSort($any($event.target).value)"
+        >
+          <option value="code">ID</option>
+          <option value="consumable">Consumable</option>
+          <option value="consumed">Consumed</option>
+          <option value="available">Available</option>
+          <option value="util">Utilisation %</option>
+          <option value="name">Name</option>
+        </select>
+        <button
+          type="button"
+          class="ctl-dir"
+          title="Toggle sort direction"
+          [attr.aria-label]="sortDir() < 0 ? 'Sorted descending' : 'Sorted ascending'"
+          (click)="toggleSortDir()"
+        >{{ sortDir() < 0 ? '↓' : '↑' }}</button>
+      </div>
+
+      <div class="ctl grow">
+        <fluent-text-input
+          class="ctl-search"
+          type="search"
+          [attr.value]="query()"
+          [attr.placeholder]="'Filter ' + (isRoot() ? 'categories' : 'line items') + '…'"
+          (input)="onSearch($any($event.target).value)"
+        >
+          <span slot="label" class="visually-hidden">Filter rows</span>
+        </fluent-text-input>
+      </div>
+
+      @if (auth.canExport()) {
+        <fluent-button appearance="outline" (click)="exportCsv()">Export CSV</fluent-button>
+      }
+    </div>
+
+    <!-- legend -->
+    @if (view() === 'chart') {
+      <div class="legend">
+        <span class="lg-i"><span class="lg-sw sw-fill"></span><span>Consumed</span></span>
+        <span class="lg-i"><span class="lg-sw sw-track"></span><span>Available</span></span>
+        <span class="lg-i"><span class="lg-sw sw-over"></span><span>Overspent</span></span>
+        <span class="lg-hint">
+          {{ isRoot() ? 'Select a category to drill into its commitment items' : 'Commitment-item detail' }}
+        </span>
+      </div>
+    }
+
+    <!-- rows -->
+    @if (!rows().length) {
+      <div class="empty">
+        @if (query()) {
+          No rows match “{{ query() }}”.
+        } @else {
+          No rows at this level.
+        }
+      </div>
+    } @else if (view() === 'chart') {
+      <div class="chartcard" [class.units-full]="units() === 'full'">
+        <div class="bars-hd">
+          <div>{{ isRoot() ? 'Category' : 'Commitment item' }}</div>
+          <div>
+            {{ scale() === 'utilization' ? 'Utilisation of own budget' : 'Consumable budget (relative)' }}
+          </div>
+          <div class="bar-vals">
+            <span class="bv">Consumed</span><span class="bv">Available</span><span class="bv">Util %</span>
+          </div>
+        </div>
+        <div class="bars">
+          @for (r of rows(); track r.name + r.row) {
+            <button
+              type="button"
+              class="bar-row"
+              [class.drill]="isRoot()"
+              [attr.aria-label]="isRoot() ? 'Drill into ' + r.name : r.name"
+              [disabled]="!isRoot()"
+              (click)="drillInto(r)"
+              (mousemove)="showTip($event, r)"
+              (mouseleave)="hideTip()"
+              (blur)="hideTip()"
+            >
+              <div class="bar-nm" [title]="r.name">
+                <span class="bar-nm-t">{{ r.name }}</span>
+              </div>
+              <div class="bar-track">
+                <div class="bar-outer" [class.is-over]="isOver(r)" [style.width.%]="barWidth(r)">
+                  @if (isOver(r)) {
+                    <div class="seg-f over" style="width: 100%"></div>
+                  } @else {
+                    <div class="seg-f" [style.width.%]="consumedWidth(r)"></div>
+                    <div
+                      class="seg-a"
+                      [class.gap]="consumedWidth(r) > 0.4 && consumedWidth(r) < 99.6"
+                    ></div>
+                  }
+                </div>
+                <span class="bar-tip" [class.bad]="r.values.available < 0">
+                  {{ scale() === 'utilization'
+                     ? formatPercent(percent(r.values.consumed, r.values.consumable))
+                     : fmt(r.values.consumable) }}
+                </span>
+              </div>
+              <div class="bar-vals">
+                <span class="bv">{{ fmt(r.values.consumed) }}</span>
+                <span class="bv" [class.bad]="r.values.available < 0">{{ fmt(r.values.available) }}</span>
+                <span class="bv">{{ formatPercent(percent(r.values.consumed, r.values.consumable)) }}</span>
+              </div>
+            </button>
+          }
+        </div>
+      </div>
+      <div class="cardfoot">
+        {{ rows().length }} of {{ allRows().length }} rows shown · values in PKR ·
+        {{ scale() === 'utilization'
+           ? 'every bar normalised to its own budget'
+           : 'bar length is proportional to consumable budget' }}
+      </div>
+    } @else {
+      <div class="tablecard">
+        <table class="dt">
+          <thead>
+            <tr>
+              <th>
+                <button type="button" class="th-b" (click)="setSort('name')">
+                  {{ isRoot() ? 'Category' : 'Commitment item' }}
+                  @if (sortKey() === 'name') { <span class="th-ar">{{ sortDir() < 0 ? '↓' : '↑' }}</span> }
+                </button>
+              </th>
+              <th class="num">
+                <button type="button" class="th-b" (click)="setSort('consumable')">
+                  Consumable budget
+                  @if (sortKey() === 'consumable') { <span class="th-ar">{{ sortDir() < 0 ? '↓' : '↑' }}</span> }
+                </button>
+              </th>
+              <th class="num">
+                <button type="button" class="th-b" (click)="setSort('consumed')">
+                  Consumed budget
+                  @if (sortKey() === 'consumed') { <span class="th-ar">{{ sortDir() < 0 ? '↓' : '↑' }}</span> }
+                </button>
+              </th>
+              <th class="num">
+                <button type="button" class="th-b" (click)="setSort('available')">
+                  Available amount
+                  @if (sortKey() === 'available') { <span class="th-ar">{{ sortDir() < 0 ? '↓' : '↑' }}</span> }
+                </button>
+              </th>
+              <th class="num">
+                <button type="button" class="th-b" (click)="setSort('util')">
+                  Utilisation
+                  @if (sortKey() === 'util') { <span class="th-ar">{{ sortDir() < 0 ? '↓' : '↑' }}</span> }
+                </button>
+              </th>
+              <th class="num"><span class="th-b">Share of parent</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of rows(); track r.name + r.row) {
+              <tr>
+                <td [title]="r.name">
+                  @if (isRoot()) {
+                    <button type="button" class="cell-drill" (click)="drillInto(r)">{{ r.name }}</button>
+                  } @else {
+                    {{ r.name }}
+                  }
+                </td>
+                <td class="num">{{ formatFull(r.values.consumable) }}</td>
+                <td class="num">{{ formatFull(r.values.consumed) }}</td>
+                <td class="num" [class.bad]="r.values.available < 0">
+                  {{ formatFull(r.values.available) }}
+                </td>
+                <td class="num">
+                  <span class="mu">{{ formatPercent(percent(r.values.consumed, r.values.consumable)) }}</span>
+                  <span class="minimeter">
+                    <span
+                      class="minimeter-f"
+                      [class.over]="r.values.available < 0"
+                      [style.width.%]="consumedWidth(r)"
+                    ></span>
+                  </span>
+                </td>
+                <td class="num">{{ formatPercent(share(r)) }}</td>
+              </tr>
+            }
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>{{ rows().length }} rows</td>
+              <td class="num">{{ formatFull(totals().consumable) }}</td>
+              <td class="num">{{ formatFull(totals().consumed) }}</td>
+              <td class="num">{{ formatFull(totals().available) }}</td>
+              <td class="num">
+                {{ formatPercent(percent(totals().consumed, totals().consumable)) }}
+              </td>
+              <td class="num">
+                {{ formatPercent(percent(totals().consumable, node().values.consumable)) }}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    }
+  }
+</div>
+
+@if (tooltip(); as tip) {
+  <div class="tooltip" role="tooltip" [ngStyle]="tooltipStyle()">
+    <b>{{ tip.row.name }}</b>
+    <div class="tt-r"><span>Consumable</span><em>{{ formatFull(tip.row.values.consumable) }}</em></div>
+    <div class="tt-r"><span>Consumed</span><em>{{ formatFull(tip.row.values.consumed) }}</em></div>
+    <div class="tt-r">
+      <span>Available</span>
+      <em [class.bad]="tip.row.values.available < 0">{{ formatFull(tip.row.values.available) }}</em>
+    </div>
+    <div class="tt-r">
+      <span>Utilisation</span>
+      <em>{{ formatPercent(percent(tip.row.values.consumed, tip.row.values.consumable)) }}</em>
+    </div>
+    @if (tip.row.subs?.length) {
+      <div class="tt-f">{{ tip.row.subs!.length }} commitment items · click to drill</div>
+    }
+  </div>
+}

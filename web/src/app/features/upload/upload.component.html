@@ -1,0 +1,210 @@
+<div class="stage">
+  <div class="up-wrap">
+    <div class="up-head">
+      <div class="eyebrow">Step 1 — Source intake</div>
+      <h2>Load a funds centre budget export</h2>
+      <p>
+        Drop the SAP <em>Funds Center / Commitment Item</em> export below. The file is parsed and
+        reconciled on the server; nothing is stored until you import it.
+      </p>
+    </div>
+
+    <ol class="steps" aria-label="Import progress">
+      @for (s of [
+        { n: 1, label: 'Select file' },
+        { n: 2, label: 'Parse & map columns' },
+        { n: 3, label: 'Validate hierarchy' },
+        { n: 4, label: 'Import dataset' }
+      ]; track s.n) {
+        <li class="step" [class.done]="s.n < step()" [class.active]="s.n === step()"
+            [attr.aria-current]="s.n === step() ? 'step' : null">
+          <span class="n">{{ s.n }}</span><span class="lb">{{ s.label }}</span>
+        </li>
+      }
+    </ol>
+
+    <div
+      class="drop"
+      [class.over]="dragOver()"
+      (dragenter)="onDragOver($event)"
+      (dragover)="onDragOver($event)"
+      (dragleave)="onDragLeave($event)"
+      (drop)="onDrop($event)"
+    >
+      <div class="ico" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 16V4" /><path d="m7 9 5-5 5 5" />
+          <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+        </svg>
+      </div>
+      <h3>Drop your budget export here</h3>
+      <p>or select a file from your computer</p>
+      <fluent-button appearance="primary" (click)="browse()">Browse files</fluent-button>
+      <input
+        #fileInput
+        type="file"
+        class="visually-hidden"
+        accept=".xls,.xlsx,.xlsm,.csv,.tsv,.txt"
+        (change)="onFileSelected($event)"
+      />
+      <div class="fmts">
+        @for (f of ['XLS', 'XLSX', 'XLSM', 'CSV', 'TSV']; track f) {
+          <span class="fmt">{{ f }}</span>
+        }
+      </div>
+      <div class="dropfoot">
+        <b>Expected columns:</b>
+        Funds Center/Commitment Item · Consumable Budget · Consumed Budget · Available Amount
+      </div>
+    </div>
+
+    @if (progress().length) {
+      <div class="prog" role="status" aria-live="polite">
+        @for (row of progress(); track row.label) {
+          <div class="prog-row" [class]="'prog-row ' + row.state">
+            <span class="tick" aria-hidden="true">
+              {{ row.state === 'ok' ? '✓' : row.state === 'err' ? '!' : '' }}
+            </span>
+            <span>{{ row.label }}</span>
+            @if (row.detail) { <span class="detail">{{ row.detail }}</span> }
+          </div>
+        }
+      </div>
+    }
+
+    @if (error()) {
+      <fluent-message-bar intent="error" class="msg" role="alert">{{ error() }}</fluent-message-bar>
+    }
+
+    @if (model(); as m) {
+      <!-- source inspection -->
+      <section class="panel">
+        <div class="panel-hd">
+          <h4>Source inspection</h4>
+          <span class="cnt">{{ fileName() }}</span>
+        </div>
+        <div class="panel-bd">
+          <div class="meta">
+            @for (item of [
+              { k: 'Format', v: m.kind === 'text' ? 'Delimited' : m.kind.toUpperCase() },
+              { k: 'Sheet', v: m.sheetName },
+              { k: 'Data rows', v: formatFull(m.rowCount) },
+              { k: 'Categories', v: formatFull(m.cats.length) },
+              { k: 'Line items', v: formatFull(m.lineCount) },
+              { k: 'Header row', v: (m.hIdx + 1).toString() }
+            ]; track item.k) {
+              <div class="m"><div class="k">{{ item.k }}</div><div class="v">{{ item.v }}</div></div>
+            }
+          </div>
+
+          @if (m.deptName) {
+            <div class="deptline">
+              <span class="k">Department</span><span class="v">{{ m.deptName }}</span>
+            </div>
+          }
+
+          <div class="grid2">
+            @for (key of columnKeys; track key) {
+              <div class="field">
+                <label [attr.for]="'col-' + key">{{ columnLabels[key] }}</label>
+                <select
+                  [id]="'col-' + key"
+                  [disabled]="busy()"
+                  [value]="m.map[key]"
+                  (change)="onColumnChange(key, $any($event.target).value)"
+                >
+                  @for (h of headers(); track $index) {
+                    <option [value]="$index" [selected]="$index === m.map[key]">
+                      {{ headerLabel(h, $index) }}
+                    </option>
+                  }
+                </select>
+              </div>
+            }
+            @if (sheets().length > 1) {
+              <div class="field">
+                <label for="sheetSel">Worksheet</label>
+                <select
+                  id="sheetSel"
+                  [disabled]="busy()"
+                  [value]="m.sheetIdx"
+                  (change)="onSheetChange($any($event.target).value)"
+                >
+                  @for (s of sheets(); track s.name) {
+                    <option [value]="$index" [selected]="$index === m.sheetIdx">
+                      {{ s.name }} ({{ formatFull(s.rowCount) }} rows)
+                    </option>
+                  }
+                </select>
+              </div>
+            }
+          </div>
+        </div>
+      </section>
+
+      <!-- data quality -->
+      <section class="panel">
+        <div class="panel-hd">
+          <h4>Data quality</h4>
+          <span class="cnt">
+            @if (blockingCount()) { {{ blockingCount() }} blocking · }
+            {{ advisoryCount() }} advisory · {{ passedCount() }} passed
+          </span>
+        </div>
+        <div class="panel-bd">
+          @for (f of sortedFindings(); track f.title) {
+            <div class="finding" [class]="'finding ' + f.level">
+              <span class="badge" aria-hidden="true">
+                {{ f.level === 'ok' ? '✓' : f.level === 'crit' ? '!' : 'i' }}
+              </span>
+              <div class="body">
+                <strong>{{ f.title }}</strong>
+                <p>{{ f.detail }}</p>
+              </div>
+            </div>
+          }
+          <div class="deptline">
+            <span class="k">Rule</span>
+            <span class="v">
+              Leading 3-digit code = category · leading 9-digit code = line item ·
+              first 9-digit row = department
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <div class="actions">
+        @if (auth.canUpload()) {
+          <button
+            type="button"
+            class="tbtn tbtn--lg tbtn--primary"
+            [disabled]="!canImport()"
+            (click)="import()"
+          >
+            @if (importing()) {
+              <span class="tbtn__spin" aria-hidden="true"></span>
+              <span>Importing…</span>
+            } @else {
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <path d="M7 10l5 5 5-5" />
+                <path d="M12 15V3" />
+              </svg>
+              <span>Import dataset</span>
+            }
+          </button>
+        }
+        <button type="button" class="tbtn tbtn--lg" (click)="browse()">Choose a different file</button>
+        <a class="tbtn tbtn--lg tbtn--ghost" routerLink="/">Back to dashboard</a>
+        <div class="note">
+          @if (m.cats.length) {
+            {{ formatCompact(m.total.consumable) }} consumable across {{ m.cats.length }} categories
+          } @else {
+            No categories detected — no row in the label column starts with a 3-digit code.
+          }
+        </div>
+      </div>
+    }
+  </div>
+</div>

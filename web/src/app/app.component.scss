@@ -1,0 +1,231 @@
+:host {
+  display: block;
+  min-height: 100vh;
+}
+
+.statuschip:not(:disabled) {
+  cursor: pointer;
+}
+
+.statuschip:not(:disabled):hover {
+  color: var(--text-primary);
+  border-color: var(--hair-2);
+  background: var(--surface-3);
+}
+
+.statuschip:disabled {
+  cursor: default;
+}
+
+
+.dialog-search {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 24px;
+
+  fluent-text-input {
+    width: 100%;
+  }
+
+  > span {
+    color: var(--text-muted);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+}
+
+.dialog-message {
+  margin: 0 24px 12px;
+  padding: 10px 12px;
+  border-radius: var(--borderRadiusMedium, 4px);
+
+  &.error {
+    color: var(--over);
+    background: color-mix(in srgb, var(--over) 10%, transparent);
+  }
+}
+
+.dialog-state {
+  min-height: 210px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 30px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.dataset-list {
+  flex: 1;
+  min-height: 160px;
+  overflow: auto;
+  padding: 0 12px 12px;
+}
+
+.dataset-row {
+  display: flex;
+  align-items: center;
+  min-height: 66px;
+  border: 1px solid transparent;
+  border-radius: var(--borderRadiusMedium, 4px);
+
+  &:hover {
+    background: var(--surface-2);
+  }
+
+  &.current {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--hair));
+    background: color-mix(in srgb, var(--accent) 7%, var(--surface-1));
+  }
+}
+
+.dataset-select {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 12px;
+  text-align: left;
+}
+
+.dataset-file {
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  font-weight: 650;
+}
+
+.dataset-detail {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.current-badge {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.delete-button {
+  width: 36px;
+  height: 36px;
+  margin-right: 10px;
+  display: grid;
+  flex: none;
+  place-items: center;
+  border-radius: var(--borderRadiusMedium, 4px);
+  color: var(--text-muted);
+
+  &:hover {
+    color: var(--over);
+    background: color-mix(in srgb, var(--over) 10%, transparent);
+  }
+}
+
+.dialog-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--hair);
+  background: var(--surface-2);
+}
+
+.confirm-backdrop {
+  z-index: 220;
+}
+
+.confirm-dialog {
+  width: min(430px, 100%);
+  padding: 26px;
+  border: 1px solid var(--hair-2);
+  border-radius: var(--borderRadiusLarge, 8px);
+  background: var(--surface-1);
+  box-shadow: var(--shadow64, 0 24px 64px rgb(0 0 0 / 40%));
+
+  h2 {
+    margin-bottom: 8px;
+    font-size: 19px;
+  }
+
+  p {
+    color: var(--text-secondary);
+    line-height: 1.55;
+  }
+}
+
+.confirm-icon {
+  width: 34px;
+  height: 34px;
+  margin-bottom: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--over) 14%, transparent);
+  color: var(--over);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.danger-button {
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: var(--borderRadiusMedium, 4px);
+  background: var(--over);
+  color: #fff;
+  font-weight: 600;
+
+  &:hover:not(:disabled) {
+    filter: brightness(0.92);
+  }
+
+  &:disabled {
+    cursor: wait;
+    opacity: 0.65;
+  }
+}
+
+@media (max-width: 600px) {
+  .dialog-backdrop,
+  .confirm-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .dataset-dialog {
+    max-height: 92vh;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .dialog-search {
+    grid-template-columns: 1fr;
+  }
+
+  .confirm-dialog {
+    width: 100%;
+    border-radius: 12px 12px 0 0;
+  }
+}

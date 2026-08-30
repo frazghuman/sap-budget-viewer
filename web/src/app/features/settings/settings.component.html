@@ -1,0 +1,232 @@
+<div class="stage set-stage">
+  <header class="set-head">
+    <div>
+      <h1>Settings</h1>
+      <p class="set-sub">User invitation centre — access to Budget Control only.</p>
+    </div>
+  </header>
+
+  <section class="set-block">
+    <div class="set-block-head">
+      <div>
+        <h2>People with access</h2>
+        <p class="set-sub">
+          {{ members().length }} {{ members().length === 1 ? 'person' : 'people' }}
+          @if (pendingCount()) {
+            · <strong>{{ pendingCount() }} pending</strong>
+          }
+        </p>
+      </div>
+      <div class="set-head-tools">
+        <input
+          class="set-search"
+          type="search"
+          placeholder="Search name, email or role"
+          [value]="query()"
+          (input)="query.set($any($event.target).value)"
+        />
+        <button
+          type="button"
+          class="tbtn tbtn--primary"
+          [disabled]="!roles().length"
+          (click)="openInvite()"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          <span>Invite user</span>
+        </button>
+      </div>
+    </div>
+
+    @if (!loading() && !error() && !roles().length) {
+      <div class="set-msg warn" role="status">
+        No roles exist for Budget Control in CaaS One yet. Create one under
+        <strong>Apps &amp; Roles</strong> in CaaS One, then reload this page —
+        an invitation has to grant a role.
+      </div>
+    } @else if (rolesDerived()) {
+      <div class="set-msg info" role="status">
+        Showing the roles already in use on this app. CaaS One listed none under
+        <strong>Apps &amp; Roles</strong>, so any role not yet assigned to
+        somebody will not appear here.
+      </div>
+    }
+    @if (notice()) {
+      <div class="set-msg ok" role="status">{{ notice() }}</div>
+    }
+    @if (error()) {
+      <div class="set-msg error" role="alert">{{ error() }}</div>
+    }
+
+    @if (loading()) {
+      <div class="set-state" role="status">
+        <fluent-spinner size="medium"></fluent-spinner>
+        <span>Loading people…</span>
+      </div>
+    } @else if (!filtered().length) {
+      <div class="set-state">
+        {{ members().length ? 'Nobody matches that search.' : 'Nobody has been given access yet.' }}
+      </div>
+    } @else {
+      <table class="dt set-table">
+        <thead>
+          <tr>
+            <th class="set-c-person">Person</th>
+            <th class="set-c-role">Role on this app</th>
+            <th class="set-c-status">Status</th>
+            <th class="set-c-act">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (m of filtered(); track m.assignmentId) {
+            <tr [class.is-busy]="busyRow() === m.assignmentId">
+              <td>
+                <div class="set-person">
+                  <span class="set-av" aria-hidden="true">
+                    @if (m.photoUrl) {
+                      <img [src]="m.photoUrl" alt="" />
+                    } @else {
+                      {{ initials(m) }}
+                    }
+                  </span>
+                  <span class="set-person-txt">
+                    <span class="set-person-name">{{ m.name }}</span>
+                    <span class="set-person-mail">{{ m.email }}</span>
+                  </span>
+                </div>
+              </td>
+              <td class="set-c-role">
+                @if (roles().length) {
+                  <select
+                    class="ctl-sel set-role-sel"
+                    [value]="m.roleId"
+                    [disabled]="busyRow() === m.assignmentId"
+                    (change)="changeRole(m, $any($event.target).value)"
+                  >
+                    @for (r of roles(); track r.id) {
+                      <option [value]="r.id" [selected]="r.id === m.roleId">{{ r.name }}</option>
+                    }
+                  </select>
+                } @else {
+                  <span class="set-role-static">{{ m.roleName || '—' }}</span>
+                }
+              </td>
+              <td>
+                <span class="set-pill" [attr.data-s]="m.status">{{ m.status }}</span>
+              </td>
+              <td class="set-c-act">
+                <div class="set-menu-wrap">
+                  <button
+                    type="button"
+                    class="tbtn tbtn-icon"
+                    [attr.aria-label]="'Actions for ' + m.name"
+                    [attr.aria-expanded]="menuFor() === m.assignmentId"
+                    (click)="toggleMenu(m.assignmentId, $event)"
+                  >⋯</button>
+                  @if (menuFor() === m.assignmentId) {
+                    <div class="set-menu" role="menu">
+                      @if (m.status === 'pending') {
+                        <button type="button" role="menuitem" (click)="resend(m)">
+                          Resend invitation
+                        </button>
+                        <button type="button" role="menuitem" (click)="copyLink(m)">
+                          Copy invite link
+                        </button>
+                        <div class="set-menu-sep"></div>
+                      }
+                      <button type="button" role="menuitem" class="danger" (click)="revoke(m)">
+                        Revoke access to this app
+                      </button>
+                    </div>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </section>
+</div>
+
+@if (inviteOpen()) {
+  <div class="dialog-backdrop" (mousedown)="closeInvite()">
+    <section
+      class="dataset-dialog set-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="inviteTitle"
+      (mousedown)="$event.stopPropagation()"
+    >
+      <header class="dialog-header">
+        <div>
+          <h2 id="inviteTitle">Invite to Budget Control</h2>
+          <p>They receive a CaaS One invitation and land here with the role you pick.</p>
+        </div>
+        <button type="button" class="icon-button" aria-label="Close" (click)="closeInvite()">×</button>
+      </header>
+
+      <div class="set-form">
+        <label class="set-field">
+          <span>First name</span>
+          <input
+            class="set-input"
+            [value]="invite().firstName"
+            (input)="patchInvite({ firstName: $any($event.target).value })"
+          />
+        </label>
+        <label class="set-field">
+          <span>Last name</span>
+          <input
+            class="set-input"
+            [value]="invite().lastName"
+            (input)="patchInvite({ lastName: $any($event.target).value })"
+          />
+        </label>
+        <label class="set-field set-field-wide">
+          <span>Email</span>
+          <input
+            class="set-input"
+            type="email"
+            placeholder="name@company.com"
+            [value]="invite().email"
+            (input)="patchInvite({ email: $any($event.target).value })"
+          />
+        </label>
+        <label class="set-field set-field-wide">
+          <span>Role on this app</span>
+          <select
+            class="ctl-sel"
+            [value]="invite().roleId"
+            (change)="patchInvite({ roleId: $any($event.target).value })"
+          >
+            @if (!roles().length) {
+              <option value="">No roles defined for this app</option>
+            }
+            @for (r of roles(); track r.id) {
+              <option [value]="r.id" [selected]="r.id === invite().roleId">{{ r.name }}</option>
+            }
+          </select>
+        </label>
+      </div>
+
+      @if (error()) {
+        <div class="set-msg error" role="alert">{{ error() }}</div>
+      }
+
+      <footer class="set-dialog-foot">
+        <button type="button" class="tbtn" (click)="closeInvite()">Cancel</button>
+        <button
+          type="button"
+          class="tbtn tbtn--primary"
+          [disabled]="!canSubmitInvite()"
+          (click)="submitInvite()"
+        >
+          {{ inviting() ? 'Sending…' : 'Send invitation' }}
+        </button>
+      </footer>
+    </section>
+  </div>
+}
