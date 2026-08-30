@@ -1,10 +1,19 @@
-import { Controller, Get, Post, Query, Req, Res } from '@nestjs/common';
+import { Controller, Get, Logger, Post, Query, Req, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { CaasService } from '../caas/caas.service';
 import { extractToken } from './session-auth.guard';
 import type { AuthedRequest } from './authed-request';
 import type { SessionResponse } from './session.types';
+
+/** Origin of a configured URL, or '' when it cannot be parsed. */
+function originOf(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return '';
+  }
+}
 
 /** Only same-origin absolute paths survive, so `returnTo` cannot be an open redirect. */
 function safeReturnTo(value: unknown): string {
@@ -21,6 +30,7 @@ export class AuthController {
   private readonly caasWebUrl: string;
   private readonly callbackUrl: string;
   private readonly isProd: boolean;
+  private readonly crossSite: boolean;
 
   constructor(
     private readonly auth: AuthService,
@@ -40,13 +50,28 @@ export class AuthController {
       config.get<string>('AUTH_CALLBACK_PUBLIC_URL') ||
       'http://localhost:4200/api/auth/callback';
     this.isProd = config.get<string>('NODE_ENV') === 'production';
+
+    // When the site and the API sit on different origins the session cookie is
+    // a third-party cookie, and a `Lax` one is never sent on the SPA's fetches —
+    // the user would log in, come back, and appear signed out. Derived rather
+    // than configured so local (same-origin via the dev proxy) stays `Lax`.
+    const apiOrigin = originOf(this.callbackUrl);
+    const siteOrigin = originOf(this.frontendUrl);
+    this.crossSite = !!apiOrigin && !!siteOrigin && apiOrigin !== siteOrigin;
+    new Logger(AuthController.name).log(
+      `session cookie: sameSite=${this.crossSite ? 'none' : 'lax'} ` +
+        `secure=${this.crossSite || this.isProd} ` +
+        `(site ${siteOrigin || '?'} / api ${apiOrigin || '?'})`,
+    );
   }
 
   private cookieOptions(maxAge = 1000 * 60 * 60 * 12) {
     return {
       httpOnly: true,
-      sameSite: 'lax' as const,
-      secure: this.isProd,
+      // `None` is the only value a browser will return cross-site, and it is
+      // only accepted alongside `Secure`.
+      sameSite: this.crossSite ? ('none' as const) : ('lax' as const),
+      secure: this.crossSite || this.isProd,
       path: '/',
       maxAge,
     };
