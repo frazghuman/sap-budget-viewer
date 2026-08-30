@@ -15,6 +15,7 @@ import { authGuard, uploadGuard, viewGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 import { SessionResponse } from './models';
 import { BrowserNavigator } from './navigator.service';
+import { environment } from '../../environments/environment';
 
 class NavigatorStub {
   readonly visited: string[] = [];
@@ -68,7 +69,7 @@ describe('route guards', () => {
   afterEach(() => http.verify());
 
   function flush(session: Partial<SessionResponse>): void {
-    http.expectOne('/api/auth/session').flush({
+    http.expectOne(`${environment.apiBaseUrl}/auth/session`).flush({
       canView: false,
       canUpload: false,
       canExport: false,
@@ -86,7 +87,7 @@ describe('route guards', () => {
     flush({ authenticated: false });
 
     expect(result.value).toBeFalse();
-    expect(nav.visited[0]).toBe('/api/auth/login?returnTo=%2Fupload');
+    expect(nav.visited[0]).toBe(`${environment.apiBaseUrl}/auth/login?returnTo=%2Fupload`);
   });
 
   it('lets an authenticated viewer through the view guard', () => {
@@ -122,6 +123,6 @@ describe('route guards', () => {
     flush({ authenticated: false });
 
     expect(result.value).toBeFalse();
-    expect(nav.visited[0]).toContain('/api/auth/login');
+    expect(nav.visited[0]).toContain(`${environment.apiBaseUrl}/auth/login`);
   });
 });

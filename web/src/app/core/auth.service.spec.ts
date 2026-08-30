@@ -5,6 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import { AuthService } from './auth.service';
 import { SessionResponse } from './models';
 import { BrowserNavigator } from './navigator.service';
+import { environment } from '../../environments/environment';
 
 class NavigatorStub {
   readonly visited: string[] = [];
@@ -53,7 +54,7 @@ describe('AuthService', () => {
 
   it('exposes the permission flags from the session payload', () => {
     service.loadSession().subscribe();
-    const req = http.expectOne('/api/auth/session');
+    const req = http.expectOne(`${environment.apiBaseUrl}/auth/session`);
     expect(req.request.withCredentials).toBeTrue();
     req.flush(adminSession);
 
@@ -68,7 +69,7 @@ describe('AuthService', () => {
 
   it('denies upload and export to a view-only session', () => {
     service.loadSession().subscribe();
-    http.expectOne('/api/auth/session').flush({
+    http.expectOne(`${environment.apiBaseUrl}/auth/session`).flush({
       authenticated: true,
       user: { sub: 'u2', email: 'viewer@sui.pk', userType: 'staff', displayName: 'Viewer' },
       permissions: [{ featureKey: 'budget', actions: ['view'] }],
@@ -84,7 +85,7 @@ describe('AuthService', () => {
 
   it('treats a missing flag as denied rather than granted', () => {
     service.loadSession().subscribe();
-    http.expectOne('/api/auth/session').flush({ authenticated: true } as SessionResponse);
+    http.expectOne(`${environment.apiBaseUrl}/auth/session`).flush({ authenticated: true } as SessionResponse);
 
     expect(service.authenticated()).toBeTrue();
     expect(service.canView()).toBeFalse();
@@ -95,7 +96,7 @@ describe('AuthService', () => {
   it('falls back to an anonymous session when the endpoint fails', () => {
     service.loadSession().subscribe();
     http
-      .expectOne('/api/auth/session')
+      .expectOne(`${environment.apiBaseUrl}/auth/session`)
       .flush('nope', { status: 500, statusText: 'Server Error' });
 
     expect(service.authenticated()).toBeFalse();
@@ -104,26 +105,26 @@ describe('AuthService', () => {
 
   it('caches the session so repeat callers do not re-request it', () => {
     service.loadSession().subscribe();
-    http.expectOne('/api/auth/session').flush(adminSession);
+    http.expectOne(`${environment.apiBaseUrl}/auth/session`).flush(adminSession);
 
     let replayed: SessionResponse | null = null;
     service.loadSession().subscribe((s) => (replayed = s));
 
-    expect(http.match('/api/auth/session').length).toBe(0);
+    expect(http.match(`${environment.apiBaseUrl}/auth/session`).length).toBe(0);
     expect(replayed).not.toBeNull();
   });
 
   it('sends the current path as returnTo when starting login', () => {
     service.login();
-    expect(nav.visited[0]).toBe('/api/auth/login?returnTo=%2Fdatasets%2Fabc');
+    expect(nav.visited[0]).toBe(`${environment.apiBaseUrl}/auth/login?returnTo=%2Fdatasets%2Fabc`);
   });
 
   it('clears the session and returns home on logout', () => {
     service.loadSession().subscribe();
-    http.expectOne('/api/auth/session').flush(adminSession);
+    http.expectOne(`${environment.apiBaseUrl}/auth/session`).flush(adminSession);
 
     service.logout();
-    http.expectOne('/api/auth/logout').flush({});
+    http.expectOne(`${environment.apiBaseUrl}/auth/logout`).flush({});
 
     expect(service.authenticated()).toBeFalse();
     expect(nav.visited).toContain('/');

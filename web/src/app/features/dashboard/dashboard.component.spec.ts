@@ -9,6 +9,7 @@ import { AuthService } from '../../core/auth.service';
 import { BudgetModel, DatasetDetail, DatasetSummary, SessionResponse } from '../../core/models';
 import { BrowserNavigator } from '../../core/navigator.service';
 import { DashboardComponent } from './dashboard.component';
+import { environment } from '../../../environments/environment';
 
 const model: BudgetModel = {
   fileName: 'FMRP.xlsx',
@@ -98,14 +99,14 @@ describe('DashboardComponent', () => {
     http = TestBed.inject(HttpTestingController);
     const auth = TestBed.inject(AuthService);
     auth.loadSession().subscribe();
-    http.expectOne('/api/auth/session').flush(s);
+    http.expectOne(`${environment.apiBaseUrl}/auth/session`).flush(s);
 
     fixture = TestBed.createComponent(DashboardComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
 
-    http.expectOne('/api/datasets').flush([summary]);
-    http.expectOne('/api/datasets/ds-1').flush(dataset);
+    http.expectOne(`${environment.apiBaseUrl}/datasets`).flush([summary]);
+    http.expectOne(`${environment.apiBaseUrl}/datasets/ds-1`).flush(dataset);
     fixture.detectChanges();
   }
 

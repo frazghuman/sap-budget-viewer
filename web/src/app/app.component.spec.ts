@@ -6,6 +6,7 @@ import { provideRouter } from '@angular/router';
 
 import { AppComponent } from './app.component';
 import { ANONYMOUS_SESSION } from './core/models';
+import { environment } from '../environments/environment';
 
 describe('AppComponent', () => {
   let http: HttpTestingController;
@@ -25,13 +26,13 @@ describe('AppComponent', () => {
     const fixture = TestBed.createComponent(AppComponent);
     expect(fixture.componentInstance).toBeTruthy();
     fixture.detectChanges();
-    http.expectOne('/api/auth/session').flush(ANONYMOUS_SESSION);
+    http.expectOne(`${environment.apiBaseUrl}/auth/session`).flush(ANONYMOUS_SESSION);
   });
 
   it('renders the product brand', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
-    http.expectOne('/api/auth/session').flush(ANONYMOUS_SESSION);
+    http.expectOne(`${environment.apiBaseUrl}/auth/session`).flush(ANONYMOUS_SESSION);
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
@@ -42,7 +43,7 @@ describe('AppComponent', () => {
   it('hides the upload entry point from users without budget:create', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
-    http.expectOne('/api/auth/session').flush({
+    http.expectOne(`${environment.apiBaseUrl}/auth/session`).flush({
       authenticated: true,
       user: { sub: '1', email: 'v@sui.pk', userType: 'staff', displayName: 'Viewer' },
       canView: true,
@@ -60,7 +61,7 @@ describe('AppComponent', () => {
   it('opens dataset search from the header and deletes after confirmation', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
-    http.expectOne('/api/auth/session').flush({
+    http.expectOne(`${environment.apiBaseUrl}/auth/session`).flush({
       authenticated: true,
       user: { sub: '1', email: 'a@sui.pk', userType: 'staff', displayName: 'Admin' },
       permissions: [
@@ -74,7 +75,7 @@ describe('AppComponent', () => {
     fixture.detectChanges();
 
     fixture.componentInstance.openDatasetDialog();
-    const request = http.expectOne('/api/datasets');
+    const request = http.expectOne(`${environment.apiBaseUrl}/datasets`);
     request.flush([
       {
         id: 'dataset-1',
@@ -103,7 +104,7 @@ describe('AppComponent', () => {
       new Event('click'),
     );
     fixture.componentInstance.deleteDataset();
-    http.expectOne('/api/datasets/dataset-1').flush({ deleted: true });
+    http.expectOne(`${environment.apiBaseUrl}/datasets/dataset-1`).flush({ deleted: true });
     fixture.detectChanges();
 
     expect(fixture.componentInstance.datasets()).toHaveSize(0);
