@@ -2,5 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "outputDirectory": "dist/web/browser",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "comment": "Serve the API from this origin. Not a convenience: the session cookie is set by the API, and a cookie on a different registrable domain (vercel.app vs caas-group.com) is a third-party cookie, which Chrome no longer sends — so the user signs in, comes back, and the SPA sees an anonymous session and bounces them to sign in again. Proxying here makes the cookie first-party. Must stay ahead of the SPA catch-all below: Vercel takes the first match.",
+      "source": "/api/(.*)",
+      "destination": "https://sbc-api.vercel.app/api/$1"
+    },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
