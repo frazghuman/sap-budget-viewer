@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { DatasetsController } from './datasets.controller';
+import { PublicDatasetsController } from './public-datasets.controller';
 import { DatasetsService } from './datasets.service';
 import { Dataset, DatasetSchema } from './dataset.schema';
 import { ParserModule } from '../parser/parser.module';
@@ -14,7 +15,7 @@ import { AuthModule } from '../auth/auth.module';
     CaasModule,
     AuthModule,
   ],
-  controllers: [DatasetsController],
+  controllers: [DatasetsController, PublicDatasetsController],
   providers: [DatasetsService],
   exports: [DatasetsService],
 })

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, isValidObjectId } from 'mongoose';
+import * as crypto from 'crypto';
 import { Dataset, DatasetDocument } from './dataset.schema';
 import type { BudgetModel, ColumnMap, LineItem } from '../parser/parser.types';
 import type { SessionUser } from '../auth/session.types';
@@ -33,6 +34,13 @@ export interface DatasetSummary {
 /** A summary plus the normalized model the dashboard drills through. */
 export interface DatasetDetail extends DatasetSummary {
   model: BudgetModel;
+}
+
+/** The state of a dataset's public link, as the share dialog needs it. */
+export interface ShareState {
+  shared: boolean;
+  token: string | null;
+  sharedAt: Date | null;
 }
 
 /** Either a hydrated document or a `.lean()` result. */
@@ -201,6 +209,98 @@ export class DatasetsService implements OnModuleInit {
     if (!result.deletedCount) {
       throw new NotFoundException(`Dataset ${id} not found`);
     }
+  }
+
+  // ─── Public sharing ─────────────────────────────────────────────────────────
+
+  /**
+   * 192 bits from a CSPRNG. The token *is* the authorisation — anyone holding
+   * it reads the dataset — so it has to be long enough that guessing is not a
+   * strategy, and generated with `randomBytes` rather than anything seeded by
+   * time or `Math.random`.
+   */
+  private newShareToken(): string {
+    return crypto.randomBytes(24).toString('base64url');
+  }
+
+  async getShare(id: string): Promise<ShareState> {
+    const doc = await this.findOne(id);
+    return {
+      shared: !!doc.shareToken,
+      token: doc.shareToken ?? null,
+      sharedAt: doc.sharedAt ?? null,
+    };
+  }
+
+  /**
+   * Return the existing link, or mint one.
+   *
+   * Deliberately not a rotate: pressing Share twice should hand back the same
+   * URL, otherwise every accidental second click silently breaks a link that
+   * has already been sent to someone.
+   */
+  async createShare(id: string, user: SessionUser): Promise<ShareState> {
+    const doc = await this.findOne(id);
+    if (!doc.shareToken) {
+      doc.shareToken = this.newShareToken();
+      doc.sharedAt = new Date();
+      doc.sharedBy = user.sub;
+      await doc.save();
+      this.logger.log(`[SHARE] ${user.email} published dataset ${id}`);
+    }
+    return {
+      shared: true,
+      token: doc.shareToken,
+      sharedAt: doc.sharedAt ?? null,
+    };
+  }
+
+  /** Clearing the token is the revocation — nothing can be looked up by it. */
+  async revokeShare(id: string, user: SessionUser): Promise<ShareState> {
+    const doc = await this.findOne(id);
+    if (doc.shareToken) {
+      doc.shareToken = null;
+      doc.sharedAt = null;
+      doc.sharedBy = null;
+      await doc.save();
+      this.logger.log(`[SHARE] ${user.email} revoked the link for dataset ${id}`);
+    }
+    return { shared: false, token: null, sharedAt: null };
+  }
+
+  /**
+   * The dataset behind a share token, with everything an anonymous reader has
+   * no business seeing stripped out.
+   *
+   * Redacted rather than filtered at the query, because the dashboard renders
+   * this through the same `DatasetDetail` shape as the signed-in view — the
+   * fields have to exist, they just must not carry anything real. What goes:
+   * who uploaded it (a name and email address, which is the whole of the
+   * personal data here) and the parser diagnostics, which describe rows the
+   * importer could not place and are an internal debugging aid.
+   */
+  async getSharedDetail(token: string): Promise<DatasetDetail> {
+    const clean = (token || '').trim();
+    // Bound the lookup: a token is fixed-length base64url, so anything else is
+    // not a near miss worth querying for.
+    if (!/^[A-Za-z0-9_-]{16,64}$/.test(clean)) {
+      throw new NotFoundException('That link is not valid.');
+    }
+    const doc = await this.model.findOne({ shareToken: clean }).lean().exec();
+    if (!doc) throw new NotFoundException('That link is no longer valid.');
+
+    const detail = this.toDetail(doc as unknown as DatasetRecord);
+    return {
+      ...detail,
+      uploadedByName: null,
+      uploadedByEmail: null,
+      model: {
+        ...detail.model,
+        findings: [],
+        skipped: [],
+        unknown: [],
+      },
+    };
   }
 
   async createFromModel(

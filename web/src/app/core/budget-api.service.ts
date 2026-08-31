@@ -4,7 +4,13 @@ import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 import { environment } from '../../environments/environment';
-import { ColumnMap, DatasetDetail, DatasetSummary, InspectResult } from './models';
+import {
+  ColumnMap,
+  DatasetDetail,
+  DatasetSummary,
+  InspectResult,
+  ShareState,
+} from './models';
 
 @Injectable({ providedIn: 'root' })
 export class BudgetApiService {
@@ -19,6 +25,39 @@ export class BudgetApiService {
 
   getDataset(id: string): Observable<DatasetDetail> {
     return this.http.get<DatasetDetail>(`${this.base}/datasets/${encodeURIComponent(id)}`);
+  }
+
+  // ─── Public sharing ─────────────────────────────────────────────────────────
+
+  getShare(id: string): Observable<ShareState> {
+    return this.http.get<ShareState>(
+      `${this.base}/datasets/${encodeURIComponent(id)}/share`,
+    );
+  }
+
+  /** Idempotent — returns the existing link rather than rotating it. */
+  createShare(id: string): Observable<ShareState> {
+    return this.http.post<ShareState>(
+      `${this.base}/datasets/${encodeURIComponent(id)}/share`,
+      {},
+    );
+  }
+
+  revokeShare(id: string): Observable<ShareState> {
+    return this.http.delete<ShareState>(
+      `${this.base}/datasets/${encodeURIComponent(id)}/share`,
+    );
+  }
+
+  /**
+   * The shared dataset behind a token. The only call in this service that
+   * works without a session — hence no `withCredentials`, and no dataset id:
+   * the token is the whole of the authorisation.
+   */
+  getSharedDataset(token: string): Observable<DatasetDetail> {
+    return this.http.get<DatasetDetail>(
+      `${this.base}/public/datasets/${encodeURIComponent(token)}`,
+    );
   }
 
   deleteDataset(id: string): Observable<{ deleted: boolean }> {

@@ -82,6 +82,31 @@ export class DatasetsController {
     return { deleted: true };
   }
 
+  // ─── Sharing ────────────────────────────────────────────────────────────────
+  //
+  // Gated on `budget:export` rather than `view`. Publishing a link is a
+  // disclosure — it takes data out of the app for anyone who receives it —
+  // which is the same authority downloading the CSV already carries, and more
+  // than merely being allowed to look at it inside the app.
+
+  @Get(':id/share')
+  @RequirePermission('budget', 'export')
+  getShare(@Param('id') id: string) {
+    return this.datasets.getShare(id);
+  }
+
+  @Post(':id/share')
+  @RequirePermission('budget', 'export')
+  createShare(@Param('id') id: string, @CurrentUser() user: SessionUser) {
+    return this.datasets.createShare(id, user);
+  }
+
+  @Delete(':id/share')
+  @RequirePermission('budget', 'export')
+  revokeShare(@Param('id') id: string, @CurrentUser() user: SessionUser) {
+    return this.datasets.revokeShare(id, user);
+  }
+
   @Get(':id/export')
   @RequirePermission('budget', 'export')
   async export(

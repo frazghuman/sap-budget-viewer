@@ -27,15 +27,87 @@
     </div>
   } @else {
     <!-- breadcrumb -->
-    <nav class="crumb" aria-label="Drill-down">
-      <button type="button" class="crumb-i" [class.cur]="isRoot()" (click)="toRoot()">
-        {{ rootLabel() }}
-      </button>
-      @if (!isRoot()) {
-        <span class="crumb-s" aria-hidden="true">›</span>
-        <span class="crumb-i cur">{{ node().name }}</span>
+    <div class="crumb-row">
+      <nav class="crumb" aria-label="Drill-down">
+        <button type="button" class="crumb-i" [class.cur]="isRoot()" (click)="toRoot()">
+          {{ rootLabel() }}
+        </button>
+        @if (!isRoot()) {
+          <span class="crumb-s" aria-hidden="true">›</span>
+          <span class="crumb-i cur">{{ node().name }}</span>
+        }
+      </nav>
+
+      @if (shared()) {
+        <span class="share-badge" title="You are viewing a read-only shared link">
+          <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M8 3.5c-2.9 0-5.3 1.8-6.4 4.2a.8.8 0 0 0 0 .6C2.7 10.7 5.1 12.5 8 12.5s5.3-1.8 6.4-4.2a.8.8 0 0 0 0-.6C13.3 5.3 10.9 3.5 8 3.5Zm0 7.5a3 3 0 1 1 0-6 3 3 0 0 1 0 6Zm0-1.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"
+            />
+          </svg>
+          View only
+        </span>
+      } @else if (auth.canExport()) {
+        <div class="share-wrap">
+          <button
+            type="button"
+            class="share-btn"
+            [class.on]="shareOpen()"
+            (click)="toggleShare()"
+            [attr.aria-expanded]="shareOpen()"
+            aria-haspopup="dialog"
+            title="Share a view-only link to this file"
+          >
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M11.5 10.2c-.6 0-1.1.2-1.5.6L6.8 9c.05-.2.08-.4.08-.6s-.03-.4-.08-.6l3.15-1.8c.42.4.95.6 1.55.6a2.3 2.3 0 1 0-2.3-2.3c0 .2.03.4.08.6L6.13 6.7a2.3 2.3 0 1 0 0 3.4l3.18 1.82c-.05.18-.06.3-.06.45a2.25 2.25 0 1 0 2.25-2.17Z"
+              />
+            </svg>
+            Share
+          </button>
+
+          @if (shareOpen()) {
+            <div class="share-pop" role="dialog" aria-label="Share this file">
+              <div class="share-pop-h">View-only link</div>
+              <p class="share-pop-sub">
+                Anyone with this link can see this file's figures without signing in.
+                Nothing else in Budget Control is reachable from it.
+              </p>
+
+              @if (shareError()) {
+                <p class="share-err" role="alert">{{ shareError() }}</p>
+              }
+
+              @if (shareBusy()) {
+                <p class="share-pop-sub">Working…</p>
+              } @else if (shareUrl()) {
+                <input
+                  class="share-url"
+                  type="text"
+                  readonly
+                  [value]="shareUrl()"
+                  (focus)="$any($event.target).select()"
+                />
+                <div class="share-acts">
+                  <button type="button" class="tbtn tbtn--primary" (click)="copyShareUrl()">
+                    {{ shareCopied() ? 'Copied' : 'Copy link' }}
+                  </button>
+                  <button type="button" class="tbtn" (click)="revokeShare()">Revoke</button>
+                </div>
+              } @else {
+                <div class="share-acts">
+                  <button type="button" class="tbtn tbtn--primary" (click)="createShare()">
+                    Create link
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        </div>
       }
-    </nav>
+    </div>
 
     <!-- hero + KPI tiles -->
     <section class="hero">
@@ -172,7 +244,9 @@
       </div>
 
       @if (auth.canExport()) {
-        <fluent-button appearance="outline" (click)="exportCsv()">Export CSV</fluent-button>
+        @if (!shared() && auth.canExport()) {
+          <fluent-button appearance="outline" (click)="exportCsv()">Export CSV</fluent-button>
+        }
       }
     </div>
 

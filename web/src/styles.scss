@@ -928,7 +928,15 @@ a {
   border: 1px solid transparent;
   transition: 0.13s ease;
 }
-button.crumb-i:hover {
+/* The breadcrumb's clickable step is a <button> when it drills within a
+   dataset, and an <a> when it navigates between routes — both get the same
+   affordance. */
+a.crumb-i {
+  text-decoration: none;
+}
+button.crumb-i:hover,
+a.crumb-i:hover,
+a.crumb-i:focus-visible {
   color: var(--text-primary);
   background: var(--surface-2);
   border-color: var(--hair);
@@ -941,6 +949,100 @@ button.crumb-i:hover {
 .crumb-s {
   color: var(--text-muted);
   font-size: 13px;
+}
+
+/* ── Share a view-only link ── */
+.crumb-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.crumb-row .crumb {
+  margin-bottom: 0;
+}
+.share-wrap {
+  position: relative;
+  margin-bottom: 16px;
+}
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  padding: 4px 10px;
+  border-radius: 3px;
+  border: 1px solid var(--hair);
+  cursor: pointer;
+  transition: 0.13s ease;
+}
+.share-btn:hover,
+.share-btn.on {
+  color: var(--text-primary);
+  background: var(--surface-2);
+}
+.share-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  width: min(360px, calc(100vw - 32px));
+  padding: 14px;
+  background: var(--surface-1);
+  border: 1px solid var(--hair);
+  border-radius: 6px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 14%);
+}
+.share-pop-h {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.share-pop-sub {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
+.share-err {
+  font-size: 11.5px;
+  color: var(--danger, #c1121f);
+  margin: 0 0 8px;
+}
+.share-url {
+  width: 100%;
+  font-size: 11.5px;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--surface-2);
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+  padding: 7px 8px;
+  margin-bottom: 10px;
+}
+.share-acts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/* Shown instead of the Share button when the page *is* the shared view. */
+.share-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 16px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+  padding: 4px 10px;
 }
 
 .hero {

@@ -110,10 +110,147 @@ export class DashboardComponent implements OnInit, OnDestroy {
   readonly percent = percent;
   readonly meterWidth = meterWidth;
 
+  /**
+   * True on `/shared/:token`. The same component serves both views so a shared
+   * link shows exactly the numbers the signed-in page shows; this flag is what
+   * removes every action an anonymous visitor must not have.
+   */
+  readonly shared = signal(false);
+
+  /* ── Share link (owner side) ── */
+  readonly shareOpen = signal(false);
+  readonly shareBusy = signal(false);
+  readonly shareUrl = signal<string | null>(null);
+  readonly shareError = signal<string | null>(null);
+  readonly shareCopied = signal(false);
+
   ngOnInit(): void {
+    // Optional-chained: a route may be provided without a snapshot (the unit
+    // tests do exactly that), and defaulting to the signed-in view is the safe
+    // direction to fail — it shows less, not more.
+    if (this.route.snapshot?.data?.['shared']) {
+      this.shared.set(true);
+      this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
+        this.loadShared(params.get('token'));
+      });
+      return;
+    }
     this.route.paramMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
       this.load(params.get('id'));
     });
+  }
+
+  /** Loads through the public endpoint — no session, no dataset list. */
+  private loadShared(token: string | null): void {
+    if (!token) {
+      this.error.set('That link is not valid.');
+      this.loading.set(false);
+      return;
+    }
+    this.loading.set(true);
+    this.error.set(null);
+    this.api
+      .getSharedDataset(token)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (d) => {
+          this.dataset.set(d);
+          this.chip.set(d.fileName);
+          this.path.set([]);
+          this.query.set('');
+          this.loading.set(false);
+        },
+        error: () => {
+          this.error.set('This link is no longer valid, or it has been revoked.');
+          this.loading.set(false);
+        },
+      });
+  }
+
+  // ─── Sharing ────────────────────────────────────────────────────────────────
+
+  private shareLinkFor(token: string): string {
+    return `${window.location.origin}/shared/${token}`;
+  }
+
+  /** Opens the panel, and asks whether a link already exists. */
+  toggleShare(): void {
+    const next = !this.shareOpen();
+    this.shareOpen.set(next);
+    this.shareCopied.set(false);
+    if (!next) return;
+
+    const id = this.dataset()?.id;
+    if (!id) return;
+    this.shareBusy.set(true);
+    this.shareError.set(null);
+    this.api
+      .getShare(id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (s) => {
+          this.shareUrl.set(s.token ? this.shareLinkFor(s.token) : null);
+          this.shareBusy.set(false);
+        },
+        error: () => {
+          this.shareError.set('Could not check the link for this file.');
+          this.shareBusy.set(false);
+        },
+      });
+  }
+
+  createShare(): void {
+    const id = this.dataset()?.id;
+    if (!id) return;
+    this.shareBusy.set(true);
+    this.shareError.set(null);
+    this.api
+      .createShare(id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (s) => {
+          this.shareUrl.set(s.token ? this.shareLinkFor(s.token) : null);
+          this.shareBusy.set(false);
+        },
+        error: () => {
+          this.shareError.set('Could not create a link.');
+          this.shareBusy.set(false);
+        },
+      });
+  }
+
+  revokeShare(): void {
+    const id = this.dataset()?.id;
+    if (!id) return;
+    this.shareBusy.set(true);
+    this.shareError.set(null);
+    this.api
+      .revokeShare(id)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.shareUrl.set(null);
+          this.shareCopied.set(false);
+          this.shareBusy.set(false);
+        },
+        error: () => {
+          this.shareError.set('Could not revoke the link.');
+          this.shareBusy.set(false);
+        },
+      });
+  }
+
+  async copyShareUrl(): Promise<void> {
+    const url = this.shareUrl();
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      this.shareCopied.set(true);
+    } catch {
+      // Clipboard access can be refused (permissions, insecure context); the
+      // input beside the button is selectable, so this is not a dead end.
+      this.shareError.set('Copy the link from the box above.');
+    }
   }
 
   ngOnDestroy(): void {

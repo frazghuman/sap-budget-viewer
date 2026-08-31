@@ -78,6 +78,25 @@ export class Dataset {
   skipped: LineItem[];
 
   /**
+   * Secret that makes this dataset readable without a session.
+   *
+   * Null until someone shares it, and null again the moment they revoke — the
+   * public endpoint looks the dataset up *by* this token, so clearing it is a
+   * complete revocation rather than a flag some future code path might forget
+   * to check. Sparse so the unique index only covers datasets that are
+   * actually shared.
+   */
+  @Prop({ type: String, default: null })
+  shareToken: string | null;
+
+  @Prop({ type: Date, default: null })
+  sharedAt: Date | null;
+
+  /** CaaS One user id of whoever created the current link. */
+  @Prop({ type: String, default: null })
+  sharedBy: string | null;
+
+  /**
    * CaaS One user id only. Names and emails are deliberately not stored —
    * CaaS One owns user records, and a copy here would outlive a rename or a
    * deletion. Display names are resolved from CaaS One when a dataset is read.
@@ -91,3 +110,4 @@ export class Dataset {
 
 export const DatasetSchema = SchemaFactory.createForClass(Dataset);
 DatasetSchema.index({ createdAt: -1 });
+DatasetSchema.index({ shareToken: 1 }, { unique: true, sparse: true });

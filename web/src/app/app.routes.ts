@@ -32,6 +32,18 @@ export const routes: Routes = [
     title: 'Settings — Budget Control',
   },
   {
+    /**
+     * The view-only link. No guard by design — this is the one route an
+     * anonymous visitor may reach, and it renders the dashboard in a mode that
+     * loads from the public endpoint and hides every authenticated action.
+     */
+    path: 'shared/:token',
+    data: { shared: true },
+    loadComponent: () =>
+      import('./features/dashboard/dashboard.component').then((m) => m.DashboardComponent),
+    title: 'Shared budget view — Budget Control',
+  },
+  {
     path: 'no-access',
     canActivate: [authGuard],
     loadComponent: () =>

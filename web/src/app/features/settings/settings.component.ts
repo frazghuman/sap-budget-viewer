@@ -8,6 +8,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { Subject, takeUntil } from 'rxjs';
 
 import { AuthService } from '../../core/auth.service';
@@ -27,7 +28,7 @@ const EMPTY_INVITE: InviteForm = { email: '', firstName: '', lastName: '', roleI
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterLink],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   templateUrl: './settings.component.html',
 })

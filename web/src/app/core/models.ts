@@ -205,3 +205,10 @@ export interface DrillNode {
   children: DrillRow[];
   isRoot: boolean;
 }
+
+/** State of a dataset's public, view-only link. */
+export interface ShareState {
+  shared: boolean;
+  token: string | null;
+  sharedAt: string | null;
+}

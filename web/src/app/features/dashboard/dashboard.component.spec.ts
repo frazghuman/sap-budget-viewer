@@ -91,7 +91,13 @@ describe('DashboardComponent', () => {
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: BrowserNavigator, useValue: { redirect: () => {}, currentPath: () => '/' } },
-        { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({})) } },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            paramMap: of(convertToParamMap({})),
+            snapshot: { data: {} },
+          },
+        },
       ],
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
     });
@@ -168,5 +174,89 @@ describe('DashboardComponent', () => {
     ).map((b) => b.textContent?.trim());
     expect(labels).toContain('Export CSV');
     expect(labels).not.toContain('New file');
+  });
+});
+
+/**
+ * The `/shared/:token` view. Its whole reason to exist is that it reads through
+ * the public endpoint and offers an anonymous visitor nothing else, so that is
+ * what these assert: the request that goes out, and the controls that do not
+ * come back.
+ */
+describe('DashboardComponent (shared link)', () => {
+  let fixture: ComponentFixture<DashboardComponent>;
+  let component: DashboardComponent;
+  let http: HttpTestingController;
+
+  /** What the public endpoint actually returns: no uploader, no diagnostics. */
+  const publicDataset: DatasetDetail = {
+    ...dataset,
+    uploadedByName: null,
+    uploadedByEmail: null,
+    model: { ...model, findings: [], skipped: [], unknown: [] },
+  };
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [DashboardComponent],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: BrowserNavigator, useValue: { redirect: () => {}, currentPath: () => '/' } },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            paramMap: of(convertToParamMap({ token: 'tok-123' })),
+            snapshot: { data: { shared: true } },
+          },
+        },
+      ],
+      schemas: [CUSTOM_ELEMENTS_SCHEMA],
+    });
+
+    http = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(DashboardComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  afterEach(() => http.verify());
+
+  it('reads through the public endpoint and never lists datasets', () => {
+    http
+      .expectOne(`${environment.apiBaseUrl}/public/datasets/tok-123`)
+      .flush(publicDataset);
+    fixture.detectChanges();
+
+    // The signed-in view opens by listing datasets; the shared one must not,
+    // because that endpoint requires a session and would 401 an anonymous
+    // visitor into an error screen.
+    http.expectNone(`${environment.apiBaseUrl}/datasets`);
+    expect(component.shared()).toBeTrue();
+    expect(component.loading()).toBeFalse();
+    expect(component.node().name).toBe('151100101 Sui (Prod)');
+  });
+
+  it('shows the view-only badge and no share or export controls', () => {
+    http
+      .expectOne(`${environment.apiBaseUrl}/public/datasets/tok-123`)
+      .flush(publicDataset);
+    fixture.detectChanges();
+
+    const html = (fixture.nativeElement as HTMLElement).innerHTML;
+    expect(html).toContain('View only');
+    expect(fixture.nativeElement.querySelector('.share-btn')).toBeNull();
+    expect(html).not.toContain('Export CSV');
+  });
+
+  it('explains a revoked link rather than showing an empty dashboard', () => {
+    http
+      .expectOne(`${environment.apiBaseUrl}/public/datasets/tok-123`)
+      .flush({ message: 'gone' }, { status: 404, statusText: 'Not Found' });
+    fixture.detectChanges();
+
+    expect(component.error()).toContain('no longer valid');
+    expect(component.dataset()).toBeNull();
   });
 });
